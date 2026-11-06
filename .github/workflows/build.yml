@@ -1,0 +1,63 @@
+
+name: FG JARVIS APK Builder
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Extract Project ZIP
+        run: |
+          unzip -o FG-Jarvis-v0.2.zip -d extracted
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11'
+
+      - name: Locate Android Project
+        id: project
+        run: |
+          ROOT=$(find extracted -name settings.gradle.kts -print -quit)
+          if [ -z "$ROOT" ]; then
+            ROOT=$(find extracted -name settings.gradle -print -quit)
+          fi
+          if [ -z "$ROOT" ]; then
+            echo "Gradle settings file not found"
+            exit 1
+          fi
+          echo "root=$(dirname "$ROOT")" >> "$GITHUB_OUTPUT"
+
+      - name: Build Debug APK
+        run: |
+          gradle -p "${{ steps.project.outputs.root }}" assembleDebug
+
+      - name: Collect APK
+        run: |
+          mkdir -p apk
+          find extracted -type f -path '*/build/outputs/apk/debug/*.apk' -exec cp {} apk/ \;
+          test -n "$(find apk -name '*.apk' -print -quit)"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FG-JARVIS-APK
+          path: apk/*.apk
